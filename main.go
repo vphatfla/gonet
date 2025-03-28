@@ -15,14 +15,6 @@ import (
 	"github.com/google/gopacket/routing"
 )
 
-//	"bufio"
-//	"fmt"
-//	"os"
-//	"strings"
-//
-//	"golang.org/x/crypto/ssh"
-//	"golang.org/x/crypto/ssh/knownhosts"
-
 type scanner struct {
 	// Interface to send packets in 
 	iface *net.Interface
@@ -218,7 +210,8 @@ func (s *scanner) scan() error {
 	}
 }
 func main() {
-	router, err := routing.New()
+    fmt.Println("Hello ")
+    router, err := routing.New()
 	if err != nil {
 		fmt.Println(err)
 		log.Fatal("routing err : ", err)
