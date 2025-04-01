@@ -43,7 +43,7 @@ func newScanner(ip net.IP, router routing.Router) (*scanner, error) {
 		return nil, err
 	}
 
-	fmt.Println("Scanning IP address ", string(ip))
+	fmt.Printf("Scanning IP address %v\n", ip)
 
 	s.iface, s.gw, s.src = iface, gw, src
 
@@ -158,21 +158,24 @@ func (s *scanner) scan() error {
 
 	// flow for returning packets 
 
-	ipFlow := gopacket.NewFlow(layers.EndpointIPv4, s.dest, s.src) // reverse since this is for retuning packets
+	// ipFlow := gopacket.NewFlow(layers.EndpointIPv4, s.dest, s.src) // reverse since this is for retuning packets
 
 	start := time.Now()
 
 	for {
-		if tcp.DstPort < 65535 {
+		if tcp.DstPort < 25 {
+            fmt.Printf("Sending packet to %v:%v \n", s.dest, tcp.DstPort)
 			start = time.Now()
 			tcp.DstPort += 1
 			if err := s.send(&eth, &ip4, &tcp); err != nil {
 				fmt.Printf("error sending to port %v with err %v \n ", tcp.DstPort, err)
 			}
-		}
+        } else {
+            break
+        }
 
 		if time.Since(start) > time.Second*5 {
-			fmt.Printf("timed out for %v, assuming we've seen all we can", s.dest)
+            fmt.Printf("timed out for %v:%v, assuming we've seen all we can", s.dest, tcp.DstPort)
 			return nil
 		}
 
@@ -190,24 +193,24 @@ func (s *scanner) scan() error {
 		packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 
 		// check the network layer packet 
-
-		if net := packet.NetworkLayer(); net != nil {
-			fmt.Println("packet has no netowkr layer")
-		} else if net.NetworkFlow() != ipFlow {
-			fmt.Println("Packet does not match src/dst ip")
-		} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer != nil {
+        fmt.Printf("packet = %v", packet)
+		if net := packet.NetworkLayer(); net == nil {
+			fmt.Println("packet has no network layer")
+		// } else if net.NetworkFlow() != ipFlow {
+		//	fmt.Println("Packet does not match src/dst ip")
+		} else if tcpLayer := packet.Layer(layers.LayerTypeTCP); tcpLayer == nil {
 			fmt.Println("packet does not have tcp layer")
 		} else if tcp, ok := tcpLayer.(*layers.TCP); !ok {
 			panic("tcp layer is not a tcp layer ")
-		} else if tcp.DstPort != 54321 {
-			fmt.Println("incoming packet's dst port is not equal ", tcp.DstPort)
+		// } else if tcp.DstPort != 54321 {
+		//	fmt.Println("incoming packet's dst port is not equal ", tcp.DstPort)
 		} else if tcp.RST {
 			fmt.Printf(" port %v closed", tcp.SrcPort)
 		} else if tcp.SYN && tcp.ACK {
 			fmt.Printf(" port %v open", tcp.SrcPort)
-		} else {
-		}
-	}
+		}	
+    }
+    return nil
 }
 func main() {
     fmt.Println("Hello ")
