@@ -305,5 +305,5 @@ func main() {
         log.Fatal(err)
     }
     fmt.Println("Result scanning: ", res)
-    fmt.Printf("Takes %v ", d)
+    fmt.Println("Takes", d)
 }
