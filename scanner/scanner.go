@@ -1,7 +1,6 @@
 package scanner
 
 import (
-    "errors"
     "fmt"
     "net"
     "time"
@@ -30,9 +29,8 @@ type Scanner struct {
     TCP *layers.TCP
 }
 
-func NewScanner(router routing.Router, srcIP net.IP, dstIP net.IP, srcPort layers.TCPPort) (*Scanner, error) {
+func NewScanner(router routing.Router, dstIP net.IP, srcPort layers.TCPPort) (*Scanner, error) {
     s := &Scanner{
-        SrcIP: srcIP,
         DstIP: dstIP,
 
         Opts: gopacket.SerializeOptions{
