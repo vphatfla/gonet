@@ -1,14 +1,15 @@
 package scanner
 
 import (
-    "fmt"
-    "net"
-    "time"
+	"fmt"
+	"log"
+	"net"
+	"time"
 
-    "github.com/google/gopacket"
-    "github.com/google/gopacket/layers"
-    "github.com/google/gopacket/pcap"
-    "github.com/google/gopacket/routing"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
+	"github.com/google/gopacket/routing"
 )
 
 type Scanner struct {
@@ -75,6 +76,9 @@ func NewScanner(router routing.Router, dstIP net.IP, srcPort layers.TCPPort) (*S
         SrcPort: srcPort,
         SYN: true,
     }
+    
+    s.TCP.SetNetworkLayerForChecksum(s.IPv4)
+    
     return s, nil
 }
 
@@ -92,6 +96,8 @@ func (s *Scanner) Send(l ...gopacket.SerializableLayer) error {
 
 // scan the particular port specify in args
 func (s *Scanner) ScanSinglePort(port layers.TCPPort) (string, time.Duration, error) {
+    s.TCP.DstPort = port
+
     start := time.Now()
 
     if err := s.Send(s.Eth, s.IPv4, s.TCP); err != nil {
@@ -105,6 +111,7 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (string, time.Duration, er
     data, _, err := s.Handle.ReadPacketData()
 
     if err != nil {
+        log.Println("error reading packet data ", err)
         return "", 0, err
     }
 
@@ -126,7 +133,7 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (string, time.Duration, er
     if tcpSegment.RST {
         return "CLOSED (RST)", d, nil
     } else if tcpSegment.SYN && tcpSegment.ACK {
-        return "OPEN (SYN & ACK), d, nil", d, nil
+        return "OPEN (SYN & ACK)", d, nil
     } else {
         return "UNKNOWN", d, nil
     }
