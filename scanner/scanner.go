@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"time"
 
@@ -76,9 +75,9 @@ func NewScanner(router routing.Router, dstIP net.IP, srcPort layers.TCPPort) (*S
         SrcPort: srcPort,
         SYN: true,
     }
-    
+
     s.TCP.SetNetworkLayerForChecksum(s.IPv4)
-    
+
     return s, nil
 }
 
@@ -94,50 +93,6 @@ func (s *Scanner) Send(l ...gopacket.SerializableLayer) error {
     return s.Handle.WritePacketData(s.Buf.Bytes())
 }
 
-// scan the particular port specify in args
-func (s *Scanner) ScanSinglePort(port layers.TCPPort) (string, time.Duration, error) {
-    s.TCP.DstPort = port
-
-    start := time.Now()
-
-    if err := s.Send(s.Eth, s.IPv4, s.TCP); err != nil {
-        return "", 0, err
-    }
-
-    if time.Since(start) > time.Second*3 {
-        return "Filtered (firewall, blocked)", 0, nil
-    }
-    
-    data, _, err := s.Handle.ReadPacketData()
-
-    if err != nil {
-        log.Println("error reading packet data ", err)
-        return "", 0, err
-    }
-
-    packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
-
-    d := time.Now().Sub(start)
-
-    ipLayer := packet.NetworkLayer()
-    if ipLayer == nil {
-        return "", d, fmt.Errorf("No IP/network layer in the returning packet")
-    }
-    
-    tcpLayer := packet.Layer(layers.LayerTypeTCP)
-    if tcpLayer == nil {
-        return "", d, fmt.Errorf("No TCP/transport layer in the returning packet")
-    }
-
-    tcpSegment, _ := tcpLayer.(*layers.TCP)
-    if tcpSegment.RST {
-        return "CLOSED (RST)", d, nil
-    } else if tcpSegment.SYN && tcpSegment.ACK {
-        return "OPEN (SYN & ACK)", d, nil
-    } else {
-        return "UNKNOWN", d, nil
-    }
-}
 // get MAC-HardwareAddr of the initial packet to travel to
 // this MAC addr is  needed in the ethernet layer configuration
 // if you run this on a device at home, this will return your router's MAC addr most of the time

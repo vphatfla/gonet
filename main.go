@@ -14,7 +14,7 @@ import (
 
 func main() {
     log.Println("Welcome to go net")
-    
+
     reader := bufio.NewReader(os.Stdin)
     fmt.Print("Enter IP4 address ")
     input, err := reader.ReadString('\n')
@@ -33,9 +33,18 @@ func main() {
     s, err := scanner.NewScanner(router, ip, layers.TCPPort(55555))
     defer s.Close()
 
-    m, d, err := s.ScanSinglePort(layers.TCPPort(22))
+    pr, err := s.ScanSinglePort(layers.TCPPort(22))
     if err != nil {
         log.Fatal(err)
     }
-    log.Printf("Port 22 -> %v \nScan takes %v", m, d)
+    log.Print(pr.ToString())
+
+    /* res, err := s.ScanWellKnownPorts()
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    for s := range res {
+        log.Println(s)
+    }*/
 }
