@@ -1,11 +1,13 @@
 package scanner
 
 import (
-    "fmt"
-    "time"
+	"fmt"
+	"log"
+	"time"
 
-    "github.com/google/gopacket"
-    "github.com/google/gopacket/layers"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	routeInfo "github.com/vphatfla/gonet/routing"
 )
 
 type PortResult struct {
@@ -20,18 +22,16 @@ func (pr *PortResult) ToString() string {
 // scan the particular port specify in args
 func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
     s.TCP.DstPort = port
-    // expected IP flow for the returning packet 
-    // return packet's source IP must be the sending packet's dst IP   
+    // expected IP flow for the returning packet
+    // return packet's source IP must be the sending packet's dst IP
     expectIPFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
     start := time.Now()
     if err := s.Send(s.Eth, s.IPv4, s.TCP); err != nil {
         return nil, err
     }
-    i := 0
     for {
-        i += 1
-        // wait 5 seconds
-        if time.Since(start) > time.Second*3 {
+        // wait 1 seconds
+        if time.Since(start) > time.Second {
             return &PortResult{Status: "Filtered (firewall, blocked)", Port: port, Duration: 0} , nil
         }
 
@@ -73,23 +73,34 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
     }
 }
 
+// scan ports in range
+func (s *Scanner) scanRangePorts(ch chan *PortResult, start, end layers.TCPPort) {
+    for p:= start; p < end; p+=1 {
+        r, _ := s.ScanSinglePort(p)
+        log.Printf("s = %v", s)
+        log.Printf("Result scan port %v -> ", r.ToString())
+        ch <- r
+    }
+}
 // scan all well-known port from 0 to 1023
-func (s *Scanner) ScanWellKnownPorts() ([]string, error) {
+func ScanWellKnownPorts(ri *routeInfo.RouteInfo) ([]string, error) {
     ch := make(chan *PortResult)
     res:= make([]string, 1025)
-    for p:= 0; p <= 1023; p+=1 {
-        go func() {
-            r, err := s.ScanSinglePort(layers.TCPPort(p))
-            if err != nil || (r != nil && r.Status != "CLOSED (RST)"){
-                ch <- r
-            }
-        }()
+
+    start := 0
+    for start <= 1023 {
+        s, err := NewScanner(ri, layers.TCPPort(3000+start))
+        if err != nil {
+            return nil, err
+        }
+        go s.scanRangePorts(ch, layers.TCPPort(start), layers.TCPPort(start + 300))
+        start += 300
     }
 
     go func() {
-        pr := <- ch
-        res[pr.Port] = pr.ToString()
+        r := <- ch
+        log.Printf("r -> %v", r.ToString())
+        res[r.Port] = r.ToString()
     }()
-
     return res, nil
 }

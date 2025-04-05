@@ -8,7 +8,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	"github.com/google/gopacket/routing"
+	routeInfo "github.com/vphatfla/gonet/routing"
 )
 
 type Scanner struct {
@@ -29,9 +29,9 @@ type Scanner struct {
     TCP *layers.TCP
 }
 
-func NewScanner(router routing.Router, dstIP net.IP, srcPort layers.TCPPort) (*Scanner, error) {
+func NewScanner(ri *routeInfo.RouteInfo, srcPort layers.TCPPort) (*Scanner, error) {
     s := &Scanner{
-        DstIP: dstIP,
+        DstIP: ri.DstIP,
 
         Opts: gopacket.SerializeOptions{
             FixLengths: true,
@@ -41,12 +41,7 @@ func NewScanner(router routing.Router, dstIP net.IP, srcPort layers.TCPPort) (*S
     }
 
     // routing function
-    iface, gw, computedSrcIP, err := router.Route(dstIP)
-    if err != nil {
-        return nil, err
-    }
-
-    s.Iface, s.SrcIP, s.GwDstIP = iface, computedSrcIP, gw
+    s.Iface, s.SrcIP, s.GwDstIP = ri.Iface, ri.SrcIP, ri.GwIP
 
     handle, err := pcap.OpenLive(s.Iface.Name, 65535, true, pcap.BlockForever)
     if err != nil {
