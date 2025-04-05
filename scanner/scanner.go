@@ -1,14 +1,14 @@
 package scanner
 
 import (
-	"fmt"
-	"net"
-	"time"
+    "fmt"
+    "net"
+    "time"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
-	routeInfo "github.com/vphatfla/gonet/routing"
+    "github.com/google/gopacket"
+    "github.com/google/gopacket/layers"
+    "github.com/google/gopacket/pcap"
+    routeInfo "github.com/vphatfla/gonet/routing"
 )
 
 type Scanner struct {
@@ -115,29 +115,32 @@ func (s *Scanner) getInitialDstMacAddr() (error) {
         DstProtAddress: []byte(arpDest),
     }
 
+    start := time.Now()
+
     if err := s.Send(&eth, &arp); err != nil {
         return err
     }
 
-    time.Sleep(3*time.Second)
+    for {
+        if time.Since(start) > time.Second*3 {
+            return fmt.Errorf("time out getting initial  MAC addr")
+        }
+        data, _, err := s.Handle.ReadPacketData()
 
-    data, _, err := s.Handle.ReadPacketData()
+        if err != nil {
+            return err
+        }
 
-    if err != nil {
-        return err
-    }
+        packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 
-    packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
-
-    if arpLayer := packet.Layer(layers.LayerTypeARP); arpLayer != nil {
-        arp := arpLayer.(*layers.ARP)
-        // make sure that the returning packet's source addr == the sending packet dst addr
-        if net.IP(arp.SourceProtAddress).Equal(net.IP(arpDest)) {
-            // the sourceHwAddr of the returning packet is the first mac address for the packet in the first hop
-            s.InitialDstMACAddrr = net.HardwareAddr(arp.SourceHwAddress)
-            return nil
+        if arpLayer := packet.Layer(layers.LayerTypeARP); arpLayer != nil {
+            arp := arpLayer.(*layers.ARP)
+            // make sure that the returning packet's source addr == the sending packet dst addr
+            if net.IP(arp.SourceProtAddress).Equal(net.IP(arpDest)) {
+                // the sourceHwAddr of the returning packet is the first mac address for the packet in the first hop
+                s.InitialDstMACAddrr = net.HardwareAddr(arp.SourceHwAddress)
+                return nil
+            }
         }
     }
-
-    return fmt.Errorf("Error getting initial mac address")
 }

@@ -22,7 +22,6 @@ func (pr *PortResult) ToString() string {
 }
 // scan the particular port specify in args
 func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
-    fmt.Printf("s = %v \n",s)
     s.TCP.DstPort = port
     // expected IP flow for the returning packet
     // return packet's source IP must be the sending packet's dst IP
@@ -118,6 +117,7 @@ func ScanWellKnownPorts(ri *routeInfo.RouteInfo) ([]string, error) {
             break
         }
         log.Printf("r-> %v", r.ToString())
+        res[r.Port] = r.ToString()
     }
     return res, nil
 }
