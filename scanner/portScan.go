@@ -1,13 +1,14 @@
 package scanner
 
 import (
-	"fmt"
-	"log"
-	"time"
+    "fmt"
+    "log"
+    "sync"
+    "time"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	routeInfo "github.com/vphatfla/gonet/routing"
+    "github.com/google/gopacket"
+    "github.com/google/gopacket/layers"
+    routeInfo "github.com/vphatfla/gonet/routing"
 )
 
 type PortResult struct {
@@ -21,6 +22,7 @@ func (pr *PortResult) ToString() string {
 }
 // scan the particular port specify in args
 func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
+    fmt.Printf("s = %v \n",s)
     s.TCP.DstPort = port
     // expected IP flow for the returning packet
     // return packet's source IP must be the sending packet's dst IP
@@ -75,16 +77,18 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
 
 // scan ports in range
 func (s *Scanner) scanRangePorts(ch chan *PortResult, start, end layers.TCPPort) {
+    if end > 1023 {
+        end = 1023
+    }
     for p:= start; p < end; p+=1 {
         r, _ := s.ScanSinglePort(p)
-        log.Printf("s = %v", s)
-        log.Printf("Result scan port %v -> ", r.ToString())
         ch <- r
     }
 }
 // scan all well-known port from 0 to 1023
 func ScanWellKnownPorts(ri *routeInfo.RouteInfo) ([]string, error) {
-    ch := make(chan *PortResult)
+    var wg sync.WaitGroup
+    ch := make(chan *PortResult, 1025)
     res:= make([]string, 1025)
 
     start := 0
@@ -93,14 +97,27 @@ func ScanWellKnownPorts(ri *routeInfo.RouteInfo) ([]string, error) {
         if err != nil {
             return nil, err
         }
-        go s.scanRangePorts(ch, layers.TCPPort(start), layers.TCPPort(start + 300))
+        wg.Add(1)
+        go func(start int, s *Scanner) {
+            defer wg.Done()
+            /*if err != nil {
+                return nil, err
+            }*/
+            s.scanRangePorts(ch, layers.TCPPort(start), layers.TCPPort(start + 300))
+        }(start, s)
         start += 300
     }
 
     go func() {
-        r := <- ch
-        log.Printf("r -> %v", r.ToString())
-        res[r.Port] = r.ToString()
+        wg.Wait()
+        close(ch)
     }()
+    for {
+        r, ok := <- ch
+        if !ok {
+            break
+        }
+        log.Printf("r-> %v", r.ToString())
+    }
     return res, nil
 }
