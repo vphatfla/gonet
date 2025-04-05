@@ -2,11 +2,8 @@ package scanner
 
 import (
     "fmt"
-    "log"
     "time"
 
-    "github.com/google/go-cmp/cmp"
-    "github.com/google/go-cmp/cmp/cmpopts"
     "github.com/google/gopacket"
     "github.com/google/gopacket/layers"
 )
@@ -23,16 +20,15 @@ func (pr *PortResult) ToString() string {
 // scan the particular port specify in args
 func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
     s.TCP.DstPort = port
-    ipFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
-    log.Printf("Correct flow = %v", ipFlow)
-    log.Printf("End point type %v", ipFlow.EndpointType())
+    // expected IP flow for the returning packet 
+    // return packet's source IP must be the sending packet's dst IP   
+    expectIPFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
     start := time.Now()
     if err := s.Send(s.Eth, s.IPv4, s.TCP); err != nil {
         return nil, err
     }
     i := 0
     for {
-        log.Println("Iterate ", i)
         i += 1
         // wait 5 seconds
         if time.Since(start) > time.Second*3 {
@@ -47,21 +43,18 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
         packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 
         ipLayer := packet.NetworkLayer()
-        // log.Printf("IP layer = %v", ipLayer)
         if ipLayer == nil {
             continue
-            //return nil, fmt.Errorf("No IP/network layer in the returning packet")
         }
-        if ipLayer.NetworkFlow().String() != ipFlow.String() {
+        if ipLayer.NetworkFlow() != expectIPFlow {
             continue
         }
 
-        log.Printf("IP layer network flow = %v", ipLayer.NetworkFlow())
-        diff := cmp.Diff(ipLayer.NetworkFlow(), ipFlow, cmp.AllowUnexported(gopacket.Flow{}), cmpopts.EquateComparable())
-        log.Printf("diff = %v", diff)
+        // diff := cmp.Diff(ipLayer.NetworkFlow(), expectIPFlow, cmp.AllowUnexported(gopacket.Flow{}), cmpopts.EquateComparable())
+        //log.Printf("diff = %v", diff)
 
         tcpLayer := packet.Layer(layers.LayerTypeTCP)
-        log.Printf("TCP Layer = %v", tcpLayer)
+        //log.Printf("TCP Layer = %v", tcpLayer)
         if tcpLayer == nil {
             continue
             // return nil, fmt.Errorf("No TCP/transport layer in the returning packet")
@@ -70,7 +63,6 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
         d := time.Now().Sub(start)
 
         tcpSegment, _ := tcpLayer.(*layers.TCP)
-        log.Println(tcpSegment)
         if tcpSegment.RST {
             return &PortResult{Status: "CLOSED (RST)", Port: port, Duration: d} , nil
         } else if tcpSegment.SYN && tcpSegment.ACK {
