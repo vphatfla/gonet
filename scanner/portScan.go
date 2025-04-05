@@ -1,11 +1,14 @@
 package scanner
 
 import (
-	"fmt"
-	"time"
+    "fmt"
+    "log"
+    "time"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
+    "github.com/google/go-cmp/cmp"
+    "github.com/google/go-cmp/cmp/cmpopts"
+    "github.com/google/gopacket"
+    "github.com/google/gopacket/layers"
 )
 
 type PortResult struct {
@@ -20,44 +23,61 @@ func (pr *PortResult) ToString() string {
 // scan the particular port specify in args
 func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
     s.TCP.DstPort = port
-
+    ipFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
+    log.Printf("Correct flow = %v", ipFlow)
+    log.Printf("End point type %v", ipFlow.EndpointType())
     start := time.Now()
-
     if err := s.Send(s.Eth, s.IPv4, s.TCP); err != nil {
         return nil, err
     }
+    i := 0
+    for {
+        log.Println("Iterate ", i)
+        i += 1
+        // wait 5 seconds
+        if time.Since(start) > time.Second*3 {
+            return &PortResult{Status: "Filtered (firewall, blocked)", Port: port, Duration: 0} , nil
+        }
 
-    if time.Since(start) > time.Second*3 {
-        return &PortResult{Status: "Filtered (firewall, blocked)", Port: port, Duration: 0} , nil
-    }
+        data, _, err := s.Handle.ReadPacketData()
+        if err != nil {
+            return nil, err
+        }
 
-    data, _, err := s.Handle.ReadPacketData()
+        packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
 
-    if err != nil {
-        return nil, err
-    }
+        ipLayer := packet.NetworkLayer()
+        // log.Printf("IP layer = %v", ipLayer)
+        if ipLayer == nil {
+            continue
+            //return nil, fmt.Errorf("No IP/network layer in the returning packet")
+        }
+        if ipLayer.NetworkFlow().String() != ipFlow.String() {
+            continue
+        }
 
-    packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
+        log.Printf("IP layer network flow = %v", ipLayer.NetworkFlow())
+        diff := cmp.Diff(ipLayer.NetworkFlow(), ipFlow, cmp.AllowUnexported(gopacket.Flow{}), cmpopts.EquateComparable())
+        log.Printf("diff = %v", diff)
 
-    d := time.Now().Sub(start)
+        tcpLayer := packet.Layer(layers.LayerTypeTCP)
+        log.Printf("TCP Layer = %v", tcpLayer)
+        if tcpLayer == nil {
+            continue
+            // return nil, fmt.Errorf("No TCP/transport layer in the returning packet")
+        }
 
-    ipLayer := packet.NetworkLayer()
-    if ipLayer == nil {
-        return nil, fmt.Errorf("No IP/network layer in the returning packet")
-    }
+        d := time.Now().Sub(start)
 
-    tcpLayer := packet.Layer(layers.LayerTypeTCP)
-    if tcpLayer == nil {
-        return nil, fmt.Errorf("No TCP/transport layer in the returning packet")
-    }
-
-    tcpSegment, _ := tcpLayer.(*layers.TCP)
-    if tcpSegment.RST {
-        return &PortResult{Status: "CLOSED (RST)", Port: port, Duration: d} , nil
-    } else if tcpSegment.SYN && tcpSegment.ACK {
-        return &PortResult{Status: "OPEN (SYN & ACK)", Port: port, Duration:  d}, nil
-    } else {
-        return &PortResult{Status: "UNKNOWN", Port: port, Duration: d}, nil
+        tcpSegment, _ := tcpLayer.(*layers.TCP)
+        log.Println(tcpSegment)
+        if tcpSegment.RST {
+            return &PortResult{Status: "CLOSED (RST)", Port: port, Duration: d} , nil
+        } else if tcpSegment.SYN && tcpSegment.ACK {
+            return &PortResult{Status: "OPEN (SYN & ACK)", Port: port, Duration:  d}, nil
+        } else {
+            return &PortResult{Status: "UNKNOWN", Port: port, Duration: d}, nil
+        }
     }
 }
 
@@ -66,12 +86,12 @@ func (s *Scanner) ScanWellKnownPorts() ([]string, error) {
     ch := make(chan *PortResult)
     res:= make([]string, 1025)
     for p:= 0; p <= 1023; p+=1 {
-       go func() {
-           r, err := s.ScanSinglePort(layers.TCPPort(p))
-           if err != nil || (r != nil && r.Status != "CLOSED (RST)"){
+        go func() {
+            r, err := s.ScanSinglePort(layers.TCPPort(p))
+            if err != nil || (r != nil && r.Status != "CLOSED (RST)"){
                 ch <- r
-           }
-       }()
+            }
+        }()
     }
 
     go func() {

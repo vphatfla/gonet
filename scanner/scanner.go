@@ -2,6 +2,7 @@ package scanner
 
 import (
 	"fmt"
+	"log"
 	"net"
 	"time"
 
@@ -42,6 +43,7 @@ func NewScanner(router routing.Router, dstIP net.IP, srcPort layers.TCPPort) (*S
 
     // routing function
     iface, gw, computedSrcIP, err := router.Route(dstIP)
+    log.Printf("src len = %v and dst len = %v", len(computedSrcIP), len(s.DstIP))
     if err != nil {
         return nil, err
     }

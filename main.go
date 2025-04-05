@@ -22,9 +22,10 @@ func main() {
         log.Fatal("invalid input : ",err)
     }
     input = input[:len(input)-1]
-
+    log.Printf("original len input = %v", len(input))
     ip := net.ParseIP(input)
-
+    log.Printf("input ip = %s and size net ip = %v", ip, len(ip))
+    log.Printf("ip type = %v", )
     router, err := routing.New()
     if err != nil {
         log.Fatal(err)
