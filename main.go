@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 
+	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/routing"
 	routeInfo "github.com/vphatfla/gonet/routing"
 	"github.com/vphatfla/gonet/scanner"
@@ -37,7 +38,17 @@ func main() {
     }
 
     log.Print("Start scanning well know ports")
-    _, err = scanner.ScanWellKnownPorts(ri)
+    s, err := scanner.NewScanner(ri, layers.TCPPort(55555))
+    defer s.Close()
+    if err != nil {
+        log.Fatal(err)
+    }
+    res := s.ScanWellKnownPortsSingle(ri)
+   
+    for _, r := range res {
+        log.Println(r)
+    }
+    /*_, err = scanner.ScanWellKnownPorts(ri)
     log.Print("Done")
     if err != nil {
         log.Fatal(err)

@@ -58,7 +58,7 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
         //log.Printf("TCP Layer = %v", tcpLayer)
         if tcpLayer == nil {
             continue
-            // return nil, fmt.Errorf("No TCP/transport layer in the returning packet")
+            // return nil, log.Errorf("No TCP/transport layer in the returning packet")
         }
 
         d := time.Now().Sub(start)
@@ -120,4 +120,59 @@ func ScanWellKnownPorts(ri *routeInfo.RouteInfo) ([]string, error) {
         res[r.Port] = r.ToString()
     }
     return res, nil
+}
+
+// scan all well-known port 0-1023 one thread
+func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
+    expectedIPFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
+    portResults := []*PortResult{}
+    res := []string{}
+
+    s.TCP.DstPort = layers.TCPPort(0)
+    start := time.Now()
+    for {
+        log.Printf("Port %v ", s.TCP.DstPort)
+        if s.TCP.DstPort <= 1023 {
+            start = time.Now()
+            err := s.Send(s.Eth, s.IPv4, s.TCP)
+            s.TCP.DstPort += 1
+            if err != nil {
+                log.Printf("port %v -> %v", s.TCP.DstPort, err)
+                continue
+            }
+        }
+        if time.Since(start) > time.Second*3 {
+            break
+        }
+        // start reading packet
+        data, _, err := s.Handle.ReadPacketData()
+        if err != nil {
+            log.Printf("port %v -> %v", s.TCP.DstPort, err)
+        }
+        packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
+        ipLayer := packet.NetworkLayer()
+
+        if ipLayer == nil || ipLayer.NetworkFlow() != expectedIPFlow {
+            continue
+        }
+        tcpLayer := packet.Layer(layers.LayerTypeTCP)
+        if tcpLayer == nil {
+            continue
+        }
+
+        tcpSegment, _ := tcpLayer.(*layers.TCP)
+
+        if tcpSegment.RST {
+            portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "CLOSED", Duration: 0})
+        } else if tcpSegment.SYN && tcpSegment.ACK {
+            portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "OPEN", Duration: 0})
+        }
+
+    }
+
+    for _, pr := range portResults {
+        res = append(res, pr.ToString())
+    }
+
+    return res
 }
