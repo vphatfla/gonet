@@ -1,14 +1,15 @@
 package scanner
 
 import (
-    "fmt"
-    "net"
-    "time"
+	"fmt"
+	"log"
+	"net"
+	"time"
 
-    "github.com/google/gopacket"
-    "github.com/google/gopacket/layers"
-    "github.com/google/gopacket/pcap"
-    routeInfo "github.com/vphatfla/gonet/routing"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/pcap"
+	routeInfo "github.com/vphatfla/gonet/routing"
 )
 
 type Scanner struct {
@@ -77,6 +78,7 @@ func NewScanner(ri *routeInfo.RouteInfo, srcPort layers.TCPPort) (*Scanner, erro
 }
 
 func (s *Scanner) Close() {
+    log.Println("Closing scanner")
     s.Handle.Close()
 }
 

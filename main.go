@@ -44,7 +44,7 @@ func main() {
         log.Fatal(err)
     }
     res := s.ScanWellKnownPortsSingle(ri)
-   
+    // log.Println("out at main")
     for _, r := range res {
         log.Println(r)
     }
