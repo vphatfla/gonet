@@ -131,8 +131,9 @@ func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
     expectedIPFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
     portResults := []*PortResult{}
     res := []string{}
+    durationMap := make(map[layers.TCPPort]time.Time)
 
-    go func() {
+    go func(durationMap *map[layers.TCPPort]time.Time) {
         for {
             select {
                 case <- ctx.Done():
@@ -156,21 +157,28 @@ func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
                     }
 
                     tcpSegment, _ := tcpLayer.(*layers.TCP)
+                    
+                    var duration time.Duration
+                    if start, ok := (*durationMap)[tcpSegment.SrcPort]; !ok {
+                        duration = -1
+                    } else {
+                        duration = time.Since(start)
+                    }
 
                     if tcpSegment.RST {
-                        portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "CLOSED", Duration: 0})
+                        portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "CLOSED", Duration: duration})
                     } else if tcpSegment.SYN && tcpSegment.ACK {
-                        portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "OPEN", Duration: 0})
+                        portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "OPEN", Duration: duration})
                     }
             }
         }
-    }()
+    }(&durationMap)
 
     start := time.Now()
     s.TCP.DstPort = layers.TCPPort(0)
     for {
         if  s.TCP.DstPort <= 1023 {
-            //log.Printf("Port %v ", s.TCP.DstPort)
+            durationMap[s.TCP.DstPort] = time.Now()
             err := s.Send(s.Eth, s.IPv4, s.TCP)
             s.TCP.DstPort += 1
             if err != nil {
@@ -183,7 +191,7 @@ func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
             break
         }
     }
-    log.Println("Processing result")
+    // log.Println("Processing result")
     for _, pr := range portResults {
         res = append(res, pr.ToString())
     }
