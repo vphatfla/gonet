@@ -1,14 +1,15 @@
 package scanner
 
 import (
-    "fmt"
-    "log"
-    "sync"
-    "time"
+	"context"
+	"fmt"
+	"log"
+	"sync"
+	"time"
 
-    "github.com/google/gopacket"
-    "github.com/google/gopacket/layers"
-    routeInfo "github.com/vphatfla/gonet/routing"
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	routeInfo "github.com/vphatfla/gonet/routing"
 )
 
 type PortResult struct {
@@ -124,50 +125,49 @@ func ScanWellKnownPorts(ri *routeInfo.RouteInfo) ([]string, error) {
 
 // scan all well-known port 0-1023 one thread
 func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
+    ctx, cancel := context.WithCancel(context.Background())
+    defer cancel()
+
     expectedIPFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
     portResults := []*PortResult{}
     res := []string{}
 
-    s.TCP.DstPort = layers.TCPPort(0)
-
-    quit := make (chan int, 1)
     go func() {
         for {
             select {
-            case <- quit:
-//                log.Println("Quit routines")
-                return
-            default:
+                case <- ctx.Done():
+                    return
+                default:
                 //log.Println("Default")
                 // start reading packet
-                data, _, err := s.Handle.ReadPacketData()
-                if err != nil {
-                    log.Printf("port %v -> %v", s.TCP.DstPort, err)
-                }
-                packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
-                ipLayer := packet.NetworkLayer()
+                    data, _, err := s.Handle.ReadPacketData()
+                    if err != nil {
+                        log.Printf("port %v -> %v", s.TCP.DstPort, err)
+                    }
+                    packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
+                    ipLayer := packet.NetworkLayer()
 
-                if ipLayer == nil || ipLayer.NetworkFlow() != expectedIPFlow {
-                    continue
-                }
-                tcpLayer := packet.Layer(layers.LayerTypeTCP)
-                if tcpLayer == nil {
-                    continue
-                }
+                    if ipLayer == nil || ipLayer.NetworkFlow() != expectedIPFlow {
+                        continue
+                    }
+                    tcpLayer := packet.Layer(layers.LayerTypeTCP)
+                    if tcpLayer == nil {
+                        continue
+                    }
 
-                tcpSegment, _ := tcpLayer.(*layers.TCP)
+                    tcpSegment, _ := tcpLayer.(*layers.TCP)
 
-                if tcpSegment.RST {
-                    portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "CLOSED", Duration: 0})
-                } else if tcpSegment.SYN && tcpSegment.ACK {
-                    portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "OPEN", Duration: 0})
-                }
+                    if tcpSegment.RST {
+                        portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "CLOSED", Duration: 0})
+                    } else if tcpSegment.SYN && tcpSegment.ACK {
+                        portResults = append(portResults, &PortResult{Port: tcpSegment.SrcPort, Status: "OPEN", Duration: 0})
+                    }
             }
         }
     }()
 
     start := time.Now()
-
+    s.TCP.DstPort = layers.TCPPort(0)
     for {
         if  s.TCP.DstPort <= 1023 {
             //log.Printf("Port %v ", s.TCP.DstPort)
@@ -179,12 +179,11 @@ func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
             }
         }
         if time.Since(start) > time.Second*3 {
-            log.Println("Trigger timer interrupt")
-            quit <- 0
+            log.Println("Timeout after 3 seconds")
             break
         }
     }
-    //log.Println("Processing result")
+    log.Println("Processing result")
     for _, pr := range portResults {
         res = append(res, pr.ToString())
     }
