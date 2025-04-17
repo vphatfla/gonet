@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
 	"github.com/google/gopacket"
@@ -75,56 +74,8 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
     }
 }
 
-// scan ports in range
-func (s *Scanner) scanRangePorts(ch chan *PortResult, start, end layers.TCPPort) {
-    if end > 1023 {
-        end = 1023
-    }
-    for p:= start; p < end; p+=1 {
-        r, _ := s.ScanSinglePort(p)
-        ch <- r
-    }
-}
-// scan all well-known port from 0 to 1023
-func ScanWellKnownPorts(ri *routeInfo.RouteInfo) ([]string, error) {
-    var wg sync.WaitGroup
-    ch := make(chan *PortResult, 1025)
-    res:= make([]string, 1025)
-
-    start := 0
-    for start <= 1023 {
-        s, err := NewScanner(ri, layers.TCPPort(3000+start))
-        if err != nil {
-            return nil, err
-        }
-        wg.Add(1)
-        go func(start int, s *Scanner) {
-            defer wg.Done()
-            /*if err != nil {
-                return nil, err
-            }*/
-            s.scanRangePorts(ch, layers.TCPPort(start), layers.TCPPort(start + 300))
-        }(start, s)
-        start += 300
-    }
-
-    go func() {
-        wg.Wait()
-        close(ch)
-    }()
-    for {
-        r, ok := <- ch
-        if !ok {
-            break
-        }
-        log.Printf("r-> %v", r.ToString())
-        res[r.Port] = r.ToString()
-    }
-    return res, nil
-}
-
-// scan all well-known port 0-1023 one thread
-func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
+// General function to scan multiple port range from start to end inclusively
+func (s *Scanner) ScanPortsWithRange(ri *routeInfo.RouteInfo, start, end layers.TCPPort) ([]string) {
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
 
@@ -157,7 +108,7 @@ func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
                     }
 
                     tcpSegment, _ := tcpLayer.(*layers.TCP)
-                    
+
                     var duration time.Duration
                     if start, ok := (*durationMap)[tcpSegment.SrcPort]; !ok {
                         duration = -1
@@ -174,10 +125,10 @@ func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
         }
     }(&durationMap)
 
-    start := time.Now()
-    s.TCP.DstPort = layers.TCPPort(0)
+    startTime := time.Now()
+    s.TCP.DstPort = start
     for {
-        if  s.TCP.DstPort <= 1023 {
+        if  s.TCP.DstPort <= end {
             durationMap[s.TCP.DstPort] = time.Now()
             err := s.Send(s.Eth, s.IPv4, s.TCP)
             s.TCP.DstPort += 1
@@ -186,7 +137,7 @@ func (s *Scanner) ScanWellKnownPortsSingle(ri *routeInfo.RouteInfo) ([]string) {
                 continue
             }
         }
-        if time.Since(start) > time.Second*3 {
+        if time.Since(startTime) > time.Second*3 {
             log.Println("Timeout after 3 seconds")
             break
         }

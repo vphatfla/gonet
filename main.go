@@ -37,14 +37,18 @@ func main() {
         log.Fatal(err)
     }
 
-    log.Print("Start scanning well know ports")
     s, err := scanner.NewScanner(ri, layers.TCPPort(55555))
     defer s.Close()
     if err != nil {
         log.Fatal(err)
     }
-    res := s.ScanWellKnownPortsSingle(ri)
-    // log.Println("out at main")
+
+    //log.Print("Start scanning well know ports")
+    //res := s.ScanPortsWithRange(ri, layers.TCPPort(0), layers.TCPPort(1023))
+    // log.Println("out at main") */
+
+    log.Print("Start scanning all port from 0 to 65535")
+    res := s.ScanPortsWithRange(ri, layers.TCPPort(0), layers.TCPPort(65535))
     for _, r := range res {
         log.Println(r)
     }
