@@ -1,5 +1,7 @@
 github.com/google/gopacket v1.1.20-0.20250319234736-b7d9dbd15ae4 h1:iRhvvcuUeT5yDyWSnZewU+tJvKapX5VjBxqG+gU89FM=
 github.com/google/gopacket v1.1.20-0.20250319234736-b7d9dbd15ae4/go.mod h1:E8yiKNM3ZzChWoaXdHg08eM+bqgp6nkbaoKwsqVK5Y8=
+github.com/urfave/cli/v3 v3.1.1 h1:bNnl8pFI5dxPOjeONvFCDFoECLQsceDG4ejahs4Jtxk=
+github.com/urfave/cli/v3 v3.1.1/go.mod h1:FJSKtM/9AiiTOJL4fJ6TbMUkxBXn7GO9guZqoZtpYpo=
 github.com/vishvananda/netlink v1.1.0 h1:1iyaYNBLmP6L0220aDnYQpo1QEV4t4hJ+xEEhhJH8j0=
 github.com/vishvananda/netlink v1.1.0/go.mod h1:cTgwzPIzzgDAYoQrMm0EdrjRUBkTqKYppBueQtXaqoE=
 github.com/vishvananda/netns v0.0.0-20191106174202-0a2b9b5464df/go.mod h1:JP3t17pCcGlemwknint6hfoeCVQrEMVwxRLRjXpq+BU=

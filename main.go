@@ -1,7 +1,15 @@
 package main
 
 import (
-	"bufio"
+	"context"
+	"fmt"
+	"log"
+	"os"
+
+	"github.com/urfave/cli/v3"
+)
+
+/*	"bufio"
 	"fmt"
 	"log"
 	"net"
@@ -10,10 +18,22 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/routing"
 	routeInfo "github.com/vphatfla/gonet/routing"
-	"github.com/vphatfla/gonet/scanner"
-)
+	"github.com/vphatfla/gonet/scanner"*/
 
 func main() {
+    cmd := &cli.Command{
+        Name: "gonet",
+        Usage: "Scan ports status of remote server given its IP Address",
+        Action: func(ctx context.Context, c *cli.Command) error {
+            fmt.Println("Hello")
+            return nil
+        },
+    }
+
+    if err := cmd.Run(context.Background(), os.Args); err != nil {
+        log.Fatal(err)
+    }
+    /*
     log.Println("Welcome to go net")
 
     reader := bufio.NewReader(os.Stdin)
@@ -45,7 +65,7 @@ func main() {
 
     //log.Print("Start scanning well know ports")
     //res := s.ScanPortsWithRange(ri, layers.TCPPort(0), layers.TCPPort(1023))
-    // log.Println("out at main") */
+    // log.Println("out at main")
 
     log.Print("Start scanning all port from 0 to 65535")
     res := s.ScanPortsWithRange(ri, layers.TCPPort(0), layers.TCPPort(65535))
