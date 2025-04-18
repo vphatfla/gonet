@@ -14,93 +14,90 @@ import (
 
 type Scanner struct {
     // interface to send packets in
-    Iface *net.Interface
+    iface *net.Interface
 
-    DstIP, SrcIP, GwDstIP net.IP
+    handle *pcap.Handle
 
-    InitialDstMACAddrr net.HardwareAddr
+    opts gopacket.SerializeOptions
+    buf gopacket.SerializeBuffer
 
-    Handle *pcap.Handle
-
-    Opts gopacket.SerializeOptions
-    Buf gopacket.SerializeBuffer
-
-    Eth *layers.Ethernet
-    IPv4 *layers.IPv4
-    TCP *layers.TCP
+    // layers to construct network packets
+    eth *layers.Ethernet
+    ipv4 *layers.IPv4
+    tcp *layers.TCP
 }
 
 func NewScanner(ri *routeInfo.RouteInfo, srcPort layers.TCPPort) (*Scanner, error) {
     s := &Scanner{
-        DstIP: ri.DstIP,
-
-        Opts: gopacket.SerializeOptions{
+        opts: gopacket.SerializeOptions{
             FixLengths: true,
             ComputeChecksums: true,
         },
-        Buf: gopacket.NewSerializeBuffer(),
+        buf: gopacket.NewSerializeBuffer(),
     }
 
-    // routing function
-    s.Iface, s.SrcIP, s.GwDstIP = ri.Iface, ri.SrcIP, ri.GwIP
-
-    handle, err := pcap.OpenLive(s.Iface.Name, 65535, true, pcap.BlockForever)
+    handle, err := pcap.OpenLive(s.iface.Name, 65535, true, pcap.BlockForever)
     if err != nil {
         return nil, err
     }
 
-    s.Handle = handle
+    s.handle = handle
 
-    if err := s.getInitialDstMacAddr(); err != nil {
+    initMACAddr, err := s.getInitialDstMacAddr(ri);
+    if err != nil {
         return nil, err
     }
 
-    s.Eth = &layers.Ethernet{
-        SrcMAC: s.Iface.HardwareAddr,
-        DstMAC: s.InitialDstMACAddrr,
+    s.eth = &layers.Ethernet{
+        SrcMAC: s.iface.HardwareAddr,
+        DstMAC: initMACAddr,
         EthernetType: layers.EthernetTypeIPv4,
     }
-    s.IPv4 = &layers.IPv4{
-        SrcIP: s.SrcIP,
-        DstIP: s.DstIP,
+    s.ipv4 = &layers.IPv4{
+        SrcIP: ri.SrcIP,
         Version: 4,
         TTL: 64,
         Protocol: layers.IPProtocolTCP,
     }
-    s.TCP = &layers.TCP{
+    s.tcp = &layers.TCP{
         SrcPort: srcPort,
         SYN: true,
     }
 
-    s.TCP.SetNetworkLayerForChecksum(s.IPv4)
+    s.tcp.SetNetworkLayerForChecksum(s.ipv4)
 
     return s, nil
 }
 
 func (s *Scanner) Close() {
     log.Println("Closing scanner")
-    s.Handle.Close()
+    s.handle.Close()
 }
 
-func (s *Scanner) Send(l ...gopacket.SerializableLayer) error {
-    if err := gopacket.SerializeLayers(s.Buf, s.Opts, l...); err != nil {
+func (s *Scanner) SendTCPPort(dstIP net.IP, dstPort layers.TCPPort) error {
+    s.ipv4.DstIP = dstIP
+    s.tcp.DstPort = dstPort
+    return s.send(s.eth, s.ipv4, s.tcp)
+}
+func (s *Scanner) send(l ...gopacket.SerializableLayer) error {
+    if err := gopacket.SerializeLayers(s.buf, s.opts, l...); err != nil {
         return err
     }
 
-    return s.Handle.WritePacketData(s.Buf.Bytes())
+    return s.handle.WritePacketData(s.buf.Bytes())
 }
 
 // get MAC-HardwareAddr of the initial packet to travel to
 // this MAC addr is  needed in the ethernet layer configuration
 // if you run this on a device at home, this will return your router's MAC addr most of the time
-func (s *Scanner) getInitialDstMacAddr() (error) {
-    arpDest := s.DstIP
-    if s.GwDstIP != nil {
-        arpDest = s.GwDstIP
+func (s *Scanner) getInitialDstMacAddr(ri *routeInfo.RouteInfo) (net.HardwareAddr,error) {
+    arpDest := ri.DstIP
+    if ri.GwIP  != nil {
+        arpDest = ri.GwIP
     }
 
     eth := layers.Ethernet{
-        SrcMAC: s.Iface.HardwareAddr,
+        SrcMAC: s.iface.HardwareAddr,
         DstMAC: net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff},
         EthernetType: layers.EthernetTypeARP,
     }
@@ -111,26 +108,26 @@ func (s *Scanner) getInitialDstMacAddr() (error) {
         HwAddressSize: 6,
         ProtAddressSize: 4,
         Operation: layers.ARPRequest,
-        SourceHwAddress: []byte(s.Iface.HardwareAddr),
-        SourceProtAddress: []byte(s.SrcIP),
+        SourceHwAddress: []byte(s.iface.HardwareAddr),
+        SourceProtAddress: []byte(ri.SrcIP),
         DstHwAddress: []byte{0,0,0,0,0,0},
         DstProtAddress: []byte(arpDest),
     }
 
     start := time.Now()
 
-    if err := s.Send(&eth, &arp); err != nil {
-        return err
+    if err := s.send(&eth, &arp); err != nil {
+        return nil, err
     }
 
     for {
         if time.Since(start) > time.Second*3 {
-            return fmt.Errorf("time out getting initial  MAC addr")
+            return nil, fmt.Errorf("time out getting initial  MAC addr")
         }
-        data, _, err := s.Handle.ReadPacketData()
+        data, _, err := s.handle.ReadPacketData()
 
         if err != nil {
-            return err
+            return nil, err
         }
 
         packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
@@ -140,8 +137,7 @@ func (s *Scanner) getInitialDstMacAddr() (error) {
             // make sure that the returning packet's source addr == the sending packet dst addr
             if net.IP(arp.SourceProtAddress).Equal(net.IP(arpDest)) {
                 // the sourceHwAddr of the returning packet is the first mac address for the packet in the first hop
-                s.InitialDstMACAddrr = net.HardwareAddr(arp.SourceHwAddress)
-                return nil
+                return net.HardwareAddr(arp.SourceHwAddress), nil
             }
         }
     }
