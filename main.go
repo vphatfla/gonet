@@ -21,11 +21,68 @@ import (
 	"github.com/vphatfla/gonet/scanner"*/
 
 func main() {
+    var boolInt = map[bool]int{
+        true: 1,
+        false: 0,
+    }
+
     cmd := &cli.Command{
         Name: "gonet",
+        Version: "v0.0.0",
+        Copyright: "(c) 2025 vphatfla",
+        EnableShellCompletion: true,
         Usage: "Scan ports status of remote server given its IP Address",
+        Flags: []cli.Flag{
+            &cli.StringFlag{
+                Name: "ip",
+                Aliases: []string{"i"},
+                Usage: "target IP address",
+                Required: true,
+            },
+            &cli.IntSliceFlag{
+                Name: "port",
+                Aliases: []string{"p"},
+                Usage: "scane one or more ports, separated by comma, e.g, '21,80,443,25'",
+            },
+            &cli.BoolFlag{
+                Name: "well-known",
+                Aliases: []string{"wkn"},
+                Usage: "scan well-known ports (0-1023)",
+            },
+            &cli.BoolFlag{
+                Name: "full",
+                Aliases: []string{"a"},
+                Usage: "scan all possible port (0-65535)",
+            },
+        },
         Action: func(ctx context.Context, c *cli.Command) error {
-            fmt.Println("Hello")
+            rawIP := c.String("ip")
+            if len(rawIP) == 0 {
+                return cli.Exit("IP addr can not be empty", 0)
+            }
+            
+            if boolInt[c.IsSet("port")] + boolInt[c.IsSet("well-known")] + boolInt[c.IsSet("full")] != 1 {
+                return cli.Exit("one (and only one) flag allowed between port, well-known, full", 0)
+            }
+            
+            if c.IsSet("port") {
+                ports := c.IntSlice("port")
+                fmt.Println("ports input : ", ports)
+                return nil
+            }
+            
+            if c.IsSet("well-known") {
+                wkn := c.Bool("well-known")
+                fmt.Println("well known ? ", wkn)
+                return nil
+            }
+            
+            if c.IsSet("full") {
+                full := c.Bool("full")
+                fmt.Println("full ? ", full)
+                return nil
+            }
+
             return nil
         },
     }
