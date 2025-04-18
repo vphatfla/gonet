@@ -4,9 +4,14 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net"
 	"os"
 
+	"github.com/google/gopacket/layers"
+	"github.com/google/gopacket/routing"
 	"github.com/urfave/cli/v3"
+	"github.com/vphatfla/gonet/routeInfo"
+	"github.com/vphatfla/gonet/scanner"
 )
 
 /*	"bufio"
@@ -60,23 +65,45 @@ func main() {
             if len(rawIP) == 0 {
                 return cli.Exit("IP addr can not be empty", 0)
             }
-            
+
+            dstIP := net.ParseIP(rawIP).To4()
+
+            if dstIP == nil {
+                return cli.Exit("Invalid ipv4 addr", 0)
+            }
+
+            router, err := routing.New()
+            if err != nil {
+                return cli.Exit(err.Error(), 0)
+            }
+
+            ri, err := routeInfo.NewRouteInfo(router, dstIP)
+            if err != nil {
+                return cli.Exit(err.Error(), 0)
+            }
+
+            s, err := scanner.NewScanner(ri, layers.TCPPort(54321))
+            if err != nil {
+                return cli.Exit(err.Error(), 0)
+            }
+
+            defer s.Close()
             if boolInt[c.IsSet("port")] + boolInt[c.IsSet("well-known")] + boolInt[c.IsSet("full")] != 1 {
                 return cli.Exit("one (and only one) flag allowed between port, well-known, full", 0)
             }
-            
+
             if c.IsSet("port") {
                 ports := c.IntSlice("port")
                 fmt.Println("ports input : ", ports)
                 return nil
             }
-            
+
             if c.IsSet("well-known") {
                 wkn := c.Bool("well-known")
                 fmt.Println("well known ? ", wkn)
                 return nil
             }
-            
+
             if c.IsSet("full") {
                 full := c.Bool("full")
                 fmt.Println("full ? ", full)

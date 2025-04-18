@@ -2,7 +2,6 @@ package scanner
 
 import (
 	"fmt"
-	"log"
 	"net"
 	"time"
 
@@ -36,13 +35,14 @@ func NewScanner(ri *routeInfo.RouteInfo, srcPort layers.TCPPort) (*Scanner, erro
         buf: gopacket.NewSerializeBuffer(),
     }
 
+    s.iface = ri.Iface
     handle, err := pcap.OpenLive(s.iface.Name, 65535, true, pcap.BlockForever)
+
     if err != nil {
         return nil, err
     }
 
     s.handle = handle
-
     initMACAddr, err := s.getInitialDstMacAddr(ri);
     if err != nil {
         return nil, err
@@ -71,7 +71,6 @@ func NewScanner(ri *routeInfo.RouteInfo, srcPort layers.TCPPort) (*Scanner, erro
 }
 
 func (s *Scanner) Close() {
-    log.Println("Closing scanner")
     s.handle.Close()
 }
 

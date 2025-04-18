@@ -4,6 +4,16 @@ Port Scanner for Network Vulnerability
 
 ## Usage
 
+CLI install:
+
+```
+go install
+
+sudo cp ~/go/bin/gonet /usr/local/bin
+
+sudo gonet ...
+
+```
 Must compile and run the binary as root
 
 Example running scan against server outlook.com
