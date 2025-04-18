@@ -9,7 +9,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
-	routeInfo "github.com/vphatfla/gonet/routing"
+	routeInfo "github.com/vphatfla/gonet/routeInfo"
 )
 
 type Scanner struct {
@@ -55,6 +55,7 @@ func NewScanner(ri *routeInfo.RouteInfo, srcPort layers.TCPPort) (*Scanner, erro
     }
     s.ipv4 = &layers.IPv4{
         SrcIP: ri.SrcIP,
+        DstIP: ri.DstIP,
         Version: 4,
         TTL: 64,
         Protocol: layers.IPProtocolTCP,
@@ -74,8 +75,7 @@ func (s *Scanner) Close() {
     s.handle.Close()
 }
 
-func (s *Scanner) SendTCPPort(dstIP net.IP, dstPort layers.TCPPort) error {
-    s.ipv4.DstIP = dstIP
+func (s *Scanner) SendTCPPort(dstPort layers.TCPPort) error {
     s.tcp.DstPort = dstPort
     return s.send(s.eth, s.ipv4, s.tcp)
 }
@@ -87,6 +87,9 @@ func (s *Scanner) send(l ...gopacket.SerializableLayer) error {
     return s.handle.WritePacketData(s.buf.Bytes())
 }
 
+func (s *Scanner) getPacketData() ([]byte, gopacket.CaptureInfo, error) {
+    return s.handle.ReadPacketData()
+}
 // get MAC-HardwareAddr of the initial packet to travel to
 // this MAC addr is  needed in the ethernet layer configuration
 // if you run this on a device at home, this will return your router's MAC addr most of the time

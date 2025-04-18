@@ -8,7 +8,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	routeInfo "github.com/vphatfla/gonet/routing"
+	routeInfo "github.com/vphatfla/gonet/routeInfo"
 )
 
 type PortResult struct {
@@ -21,13 +21,12 @@ func (pr *PortResult) ToString() string {
     return fmt.Sprintf("Port %v status %s ---Scan takes %v", pr.Port, pr.Status, pr.Duration)
 }
 // scan the particular port specify in args
-func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
-    s.TCP.DstPort = port
+func (s *Scanner) ScanSinglePort(ri *routeInfo.RouteInfo, port layers.TCPPort) (*PortResult, error) {
     // expected IP flow for the returning packet
     // return packet's source IP must be the sending packet's dst IP
-    expectIPFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
+    expectIPFlow := gopacket.NewFlow(layers.EndpointIPv4, ri.DstIP, ri.SrcIP)
     start := time.Now()
-    if err := s.Send(s.Eth, s.IPv4, s.TCP); err != nil {
+    if err := s.SendTCPPort(port); err != nil {
         return nil, err
     }
     for {
@@ -36,7 +35,7 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
             return &PortResult{Status: "Filtered (firewall, blocked)", Port: port, Duration: 0} , nil
         }
 
-        data, _, err := s.Handle.ReadPacketData()
+        data, _, err := s.getPacketData()
         if err != nil {
             return nil, err
         }
@@ -51,14 +50,9 @@ func (s *Scanner) ScanSinglePort(port layers.TCPPort) (*PortResult, error) {
             continue
         }
 
-        // diff := cmp.Diff(ipLayer.NetworkFlow(), expectIPFlow, cmp.AllowUnexported(gopacket.Flow{}), cmpopts.EquateComparable())
-        //log.Printf("diff = %v", diff)
-
         tcpLayer := packet.Layer(layers.LayerTypeTCP)
-        //log.Printf("TCP Layer = %v", tcpLayer)
         if tcpLayer == nil {
             continue
-            // return nil, log.Errorf("No TCP/transport layer in the returning packet")
         }
 
         d := time.Now().Sub(start)
@@ -79,7 +73,7 @@ func (s *Scanner) ScanPortsWithRange(ri *routeInfo.RouteInfo, start, end layers.
     ctx, cancel := context.WithCancel(context.Background())
     defer cancel()
 
-    expectedIPFlow := gopacket.NewFlow(layers.EndpointIPv4, s.DstIP, s.SrcIP)
+    expectedIPFlow := gopacket.NewFlow(layers.EndpointIPv4, ri.DstIP, ri.SrcIP)
     portResults := []*PortResult{}
     res := []string{}
     durationMap := make(map[layers.TCPPort]time.Time)
@@ -90,11 +84,9 @@ func (s *Scanner) ScanPortsWithRange(ri *routeInfo.RouteInfo, start, end layers.
                 case <- ctx.Done():
                     return
                 default:
-                //log.Println("Default")
-                // start reading packet
-                    data, _, err := s.Handle.ReadPacketData()
+                    data, _, err := s.getPacketData()
                     if err != nil {
-                        log.Printf("port %v -> %v", s.TCP.DstPort, err)
+                        log.Printf("port %v -> %v", start, err)
                     }
                     packet := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.NoCopy)
                     ipLayer := packet.NetworkLayer()
@@ -126,14 +118,13 @@ func (s *Scanner) ScanPortsWithRange(ri *routeInfo.RouteInfo, start, end layers.
     }(&durationMap)
 
     startTime := time.Now()
-    s.TCP.DstPort = start
     for {
-        if  s.TCP.DstPort <= end {
-            durationMap[s.TCP.DstPort] = time.Now()
-            err := s.Send(s.Eth, s.IPv4, s.TCP)
-            s.TCP.DstPort += 1
+        if  start  <= end {
+            durationMap[start] = time.Now()
+            err := s.SendTCPPort(start)
+            start += 1
             if err != nil {
-                log.Printf("port %v -> %v", s.TCP.DstPort, err)
+                log.Printf("port %v -> %v", start, err)
                 continue
             }
         }
@@ -142,10 +133,8 @@ func (s *Scanner) ScanPortsWithRange(ri *routeInfo.RouteInfo, start, end layers.
             break
         }
     }
-    // log.Println("Processing result")
     for _, pr := range portResults {
         res = append(res, pr.ToString())
     }
-    //log.Println("Dont processing result")
     return res
 }
