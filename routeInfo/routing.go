@@ -1,6 +1,7 @@
 package routeInfo
 
 import (
+	"fmt"
 	"net"
 
 	"github.com/google/gopacket/routing"
@@ -14,10 +15,24 @@ import (
 type RouteInfo struct {
     Iface *net.Interface
     GwIP, SrcIP, DstIP net.IP
+    IPVersion int16
 }
 
 func NewRouteInfo(router routing.Router, dstIP net.IP) (*RouteInfo, error) {
-    iface, gwIP, srcIP, err := router.Route(dstIP)
+    var finalDstIP net.IP
+    var version int16
+    if dstIP.To4() != nil {
+        finalDstIP = dstIP.To4()
+        version = int16(4)
+    } else if dstIP.To16() != nil {
+        finalDstIP = dstIP.To16()
+        version = int16(6)
+    } else {
+        return nil, fmt.Errorf("IP Addr not valid : %v", dstIP)
+    }
+    fmt.Println(finalDstIP.To16())
+    fmt.Printf("Final dstIP = %v with version = %v", finalDstIP, version)
+    iface, gwIP, srcIP, err := router.Route(finalDstIP)
     if err != nil {
         return nil, err
     }
@@ -25,6 +40,7 @@ func NewRouteInfo(router routing.Router, dstIP net.IP) (*RouteInfo, error) {
         Iface: iface,
         GwIP: gwIP,
         SrcIP: srcIP,
-        DstIP: dstIP,
+        DstIP: finalDstIP,
+        IPVersion: version,
     }, nil
 }

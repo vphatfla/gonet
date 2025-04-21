@@ -55,10 +55,10 @@ func main() {
                 return cli.Exit("IP addr can not be empty", 0)
             }
 
-            dstIP := net.ParseIP(rawIP).To4()
+            dstIP := net.ParseIP(rawIP)
 
             if dstIP == nil {
-                return cli.Exit("Invalid ipv4 addr", 0)
+                return cli.Exit("Invalid ip addr, must be ipv4 or ipv6", 0)
             }
 
             router, err := routing.New()

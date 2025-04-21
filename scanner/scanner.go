@@ -1,16 +1,20 @@
 package scanner
 
 import (
-	"fmt"
-	"net"
-	"time"
+    "fmt"
+    "net"
+    "time"
 
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcap"
-	routeInfo "github.com/vphatfla/gonet/routeInfo"
+    "github.com/google/gopacket"
+    "github.com/google/gopacket/layers"
+    "github.com/google/gopacket/pcap"
+    routeInfo "github.com/vphatfla/gonet/routeInfo"
 )
 
+type customIPLayer interface{
+    gopacket.SerializableLayer
+    gopacket.NetworkLayer
+}
 type Scanner struct {
     // interface to send packets in
     iface *net.Interface
@@ -22,7 +26,7 @@ type Scanner struct {
 
     // layers to construct network packets
     eth *layers.Ethernet
-    ipv4 *layers.IPv4
+    ip customIPLayer 
     tcp *layers.TCP
 }
 
@@ -53,19 +57,30 @@ func NewScanner(ri *routeInfo.RouteInfo, srcPort layers.TCPPort) (*Scanner, erro
         DstMAC: initMACAddr,
         EthernetType: layers.EthernetTypeIPv4,
     }
-    s.ipv4 = &layers.IPv4{
-        SrcIP: ri.SrcIP,
-        DstIP: ri.DstIP,
-        Version: 4,
-        TTL: 64,
-        Protocol: layers.IPProtocolTCP,
+
+    if ri.IPVersion == 4 {
+        s.ip = &layers.IPv4{
+            SrcIP: ri.SrcIP,
+            DstIP: ri.DstIP,
+            Version: 4,
+            TTL: 64,
+            Protocol: layers.IPProtocolTCP,
+        }
+    } else {
+        s.ip = &layers.IPv6{
+            Version: 6,
+            SrcIP: ri.DstIP,
+            DstIP: ri.DstIP,
+            HopLimit: 64,
+            NextHeader: layers.IPProtocolTCP,
+        }
     }
     s.tcp = &layers.TCP{
         SrcPort: srcPort,
         SYN: true,
     }
 
-    s.tcp.SetNetworkLayerForChecksum(s.ipv4)
+    s.tcp.SetNetworkLayerForChecksum(s.ip)
 
     return s, nil
 }
@@ -76,7 +91,7 @@ func (s *Scanner) Close() {
 
 func (s *Scanner) SendTCPPort(dstPort layers.TCPPort) error {
     s.tcp.DstPort = dstPort
-    return s.send(s.eth, s.ipv4, s.tcp)
+    return s.send(s.eth, s.ip, s.tcp)
 }
 func (s *Scanner) send(l ...gopacket.SerializableLayer) error {
     if err := gopacket.SerializeLayers(s.buf, s.opts, l...); err != nil {
