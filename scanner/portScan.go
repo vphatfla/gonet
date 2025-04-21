@@ -18,7 +18,7 @@ type PortResult struct {
 }
 
 func (pr *PortResult) ToString() string {
-    return fmt.Sprintf("Port %v status %s ---Scan takes %v", pr.Port, pr.Status, pr.Duration)
+    return fmt.Sprintf("Port %v --> Status %s ---  Scan takes %v", pr.Port, pr.Status, pr.Duration)
 }
 // scan the particular port specify in args
 func (s *Scanner) ScanSinglePort(ri *routeInfo.RouteInfo, port layers.TCPPort) (*PortResult, error) {

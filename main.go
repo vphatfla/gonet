@@ -1,29 +1,29 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"log"
-	"net"
-	"os"
+    "context"
+    "fmt"
+    "log"
+    "net"
+    "os"
 
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/routing"
-	"github.com/urfave/cli/v3"
-	"github.com/vphatfla/gonet/routeInfo"
-	"github.com/vphatfla/gonet/scanner"
+    "github.com/google/gopacket/layers"
+    "github.com/google/gopacket/routing"
+    "github.com/urfave/cli/v3"
+    "github.com/vphatfla/gonet/routeInfo"
+    "github.com/vphatfla/gonet/scanner"
 )
 
 /*	"bufio"
-	"fmt"
-	"log"
-	"net"
-	"os"
+"fmt"
+"log"
+"net"
+"os"
 
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/routing"
-	routeInfo "github.com/vphatfla/gonet/routing"
-	"github.com/vphatfla/gonet/scanner"*/
+"github.com/google/gopacket/layers"
+"github.com/google/gopacket/routing"
+routeInfo "github.com/vphatfla/gonet/routing"
+"github.com/vphatfla/gonet/scanner"*/
 
 func main() {
     var boolInt = map[bool]int{
@@ -93,20 +93,34 @@ func main() {
             }
 
             if c.IsSet("port") {
+                fmt.Println("Scanning port(s)")
                 ports := c.IntSlice("port")
-                fmt.Println("ports input : ", ports)
+                for _, p := range ports {
+                    pr, err := s.ScanSinglePort(ri, layers.TCPPort(p))
+                    if err != nil {
+                        fmt.Printf("Scan port %v return error %v \n", pr.Port, err)
+                    } else {
+                        fmt.Println(pr.ToString())
+                    }
+                }
                 return nil
             }
 
             if c.IsSet("well-known") {
-                wkn := c.Bool("well-known")
-                fmt.Println("well known ? ", wkn)
+                fmt.Println("Scanning well-knowns ports [0...1023]")
+                prs := s.ScanPortsWithRange(ri, layers.TCPPort(0), layers.TCPPort(1023))
+                for _, r := range prs {
+                    fmt.Println(r)
+                }
                 return nil
             }
 
             if c.IsSet("full") {
-                full := c.Bool("full")
-                fmt.Println("full ? ", full)
+                fmt.Println("Scanning all possible ports [0...65535]")
+                prs := s.ScanPortsWithRange(ri, layers.TCPPort(0), layers.TCPPort(65535))
+                for _, r := range prs {
+                    fmt.Println(r)
+                }
                 return nil
             }
 
